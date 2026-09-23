@@ -1,0 +1,27 @@
+{
+  "name": "truthlens-frontend",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "TruthLens - Fake News Detection System Frontend",
+  "scripts": {
+    "dev": "vite --port 5173",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.26.2",
+    "axios": "^1.7.7",
+    "recharts": "^2.12.7",
+    "react-hot-toast": "^2.4.1",
+    "react-dropzone": "^14.2.10",
+    "lucide-react": "^0.446.0",
+    "clsx": "^2.1.1",
+    "framer-motion": "^11.9.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.1",
+    "vite": "^5.4.8"
+  }
+}

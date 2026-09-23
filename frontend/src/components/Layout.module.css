@@ -1,0 +1,289 @@
+.shell {
+  display: flex;
+  min-height: 100vh;
+}
+
+/* ─── Sidebar ──────────────────────────────────────── */
+.sidebar {
+  position: fixed;
+  top: 0; left: 0;
+  width: 248px;
+  height: 100vh;
+  background: rgba(10,15,25,0.97);
+  border-right: 1px solid var(--border);
+  backdrop-filter: blur(24px);
+  display: flex;
+  flex-direction: column;
+  z-index: 100;
+  will-change: transform;
+}
+
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 22px 18px 18px;
+  border-bottom: 1px solid var(--border);
+}
+
+.logoIcon {
+  width: 38px; height: 38px;
+  border-radius: 10px;
+  background: var(--primary-glow);
+  border: 1px solid rgba(99,102,241,0.3);
+  display: flex; align-items: center; justify-content: center;
+  color: var(--primary-light);
+  flex-shrink: 0;
+}
+
+.logoName {
+  font-size: 1rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  background: linear-gradient(135deg, #818cf8, #c084fc);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.logoSub {
+  font-size: 0.62rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  margin-top: 1px;
+}
+
+.nav {
+  flex: 1;
+  padding: 10px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow-y: auto;
+}
+
+.navItem {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  transition: all var(--transition);
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.navItem:hover {
+  background: rgba(255,255,255,0.04);
+  color: var(--text-secondary);
+}
+
+.navActive {
+  background: var(--primary-glow) !important;
+  color: var(--primary-light) !important;
+  border: 1px solid rgba(99,102,241,0.18);
+}
+
+.navIcon {
+  display: flex; align-items: center; justify-content: center;
+  width: 32px; height: 32px;
+  border-radius: 7px;
+  background: rgba(255,255,255,0.04);
+  flex-shrink: 0;
+  transition: background var(--transition);
+}
+
+.navActive .navIcon {
+  background: rgba(99,102,241,0.2);
+}
+
+.navText { display: flex; flex-direction: column; gap: 1px; }
+.navLabel { font-weight: 600; font-size: 0.845rem; }
+.navDesc { font-size: 0.66rem; color: var(--text-disabled); }
+.navActive .navDesc { color: rgba(129,140,248,0.6); }
+
+.sidebarFooter {
+  padding: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.hackBadge {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  background: linear-gradient(135deg, rgba(99,102,241,0.12), rgba(139,92,246,0.12));
+  border: 1px solid rgba(99,102,241,0.18);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  color: var(--primary-light);
+}
+
+.hackTitle {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--primary-light);
+}
+
+.hackTrack {
+  font-size: 0.62rem;
+  color: var(--text-muted);
+  letter-spacing: 0.04em;
+}
+
+/* ─── Overlay ──────────────────────────────────────── */
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.5);
+  z-index: 99;
+  display: none;
+}
+
+@media (max-width: 900px) {
+  .overlay { display: block; }
+}
+
+/* ─── Main ─────────────────────────────────────────── */
+.main {
+  flex: 1;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  transition: margin-left 0.25s var(--ease);
+}
+
+.mainShifted { margin-left: 248px; }
+
+/* ─── Header ───────────────────────────────────────── */
+.header {
+  position: sticky;
+  top: 0;
+  height: 68px;
+  background: rgba(7,11,18,0.88);
+  backdrop-filter: blur(24px);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 28px;
+  z-index: 50;
+  gap: 16px;
+}
+
+.headerLeft {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex: 1;
+  min-width: 0;
+}
+
+.menuBtn {
+  display: flex; align-items: center; justify-content: center;
+  width: 36px; height: 36px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xs);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all var(--transition);
+  flex-shrink: 0;
+}
+
+.menuBtn:hover { border-color: var(--border-hover); color: var(--text-primary); }
+
+.pageTitle {
+  font-size: 1.1rem;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pageSub {
+  font-size: 0.73rem;
+  color: var(--text-muted);
+  margin-top: 1px;
+  white-space: nowrap;
+}
+
+.headerRight {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.healthPill {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  font-size: 0.73rem;
+  font-weight: 500;
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  white-space: nowrap;
+}
+
+.healthOk { color: var(--real); border-color: var(--real-border); background: var(--real-bg); }
+.healthErr { color: var(--fake); border-color: var(--fake-border); background: var(--fake-bg); }
+
+.healthDot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.healthOk .healthDot { animation: pulse 2s infinite; }
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.retrainBtn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border-radius: var(--radius-xs);
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition);
+  white-space: nowrap;
+}
+
+.retrainBtn:hover:not(:disabled) {
+  background: var(--primary-glow);
+  border-color: rgba(99,102,241,0.3);
+  color: var(--primary-light);
+}
+
+.retrainBtn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+.spin { animation: spin 1s linear infinite; }
+
+/* ─── Content ──────────────────────────────────────── */
+.content {
+  flex: 1;
+  padding: 28px;
+}
+
+@media (max-width: 768px) {
+  .mainShifted { margin-left: 0; }
+  .header { padding: 0 16px; }
+  .content { padding: 16px; }
+}

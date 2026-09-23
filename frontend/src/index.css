@@ -1,0 +1,79 @@
+/* ═══════════════════════════════════════════════════════════
+   TruthLens — Global CSS Variables & Base Styles
+   ═══════════════════════════════════════════════════════════ */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+:root {
+  --bg-base: #070b12;
+  --bg-surface: #0c1220;
+  --bg-elevated: #111827;
+  --bg-card: rgba(255,255,255,0.035);
+  --border: rgba(255,255,255,0.07);
+  --border-hover: rgba(255,255,255,0.13);
+
+  --primary: #6366f1;
+  --primary-light: #818cf8;
+  --primary-dark: #4f46e5;
+  --primary-glow: rgba(99,102,241,0.2);
+  --secondary: #8b5cf6;
+  --accent: #06b6d4;
+
+  --fake: #ef4444;
+  --fake-bg: rgba(239,68,68,0.1);
+  --fake-border: rgba(239,68,68,0.25);
+  --real: #22c55e;
+  --real-bg: rgba(34,197,94,0.1);
+  --real-border: rgba(34,197,94,0.25);
+  --uncertain: #f59e0b;
+  --uncertain-bg: rgba(245,158,11,0.1);
+  --uncertain-border: rgba(245,158,11,0.25);
+
+  --text-primary: #f1f5f9;
+  --text-secondary: #94a3b8;
+  --text-muted: #475569;
+  --text-disabled: #334155;
+
+  --sidebar-w: 248px;
+  --header-h: 68px;
+  --radius: 14px;
+  --radius-sm: 8px;
+  --radius-xs: 5px;
+  --ease: cubic-bezier(0.4,0,0.2,1);
+  --transition: 0.2s var(--ease);
+  --font: 'Inter', -apple-system, sans-serif;
+  --mono: 'JetBrains Mono', monospace;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { font-size: 15px; scroll-behavior: smooth; }
+body {
+  font-family: var(--font);
+  background: var(--bg-base);
+  color: var(--text-primary);
+  line-height: 1.6;
+  min-height: 100vh;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 900px 700px at 15% -5%, rgba(99,102,241,0.07) 0%, transparent 65%),
+    radial-gradient(ellipse 700px 500px at 85% 105%, rgba(139,92,246,0.05) 0%, transparent 65%),
+    radial-gradient(ellipse 500px 400px at 50% 55%, rgba(6,182,212,0.025) 0%, transparent 65%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+#root { position: relative; z-index: 1; }
+
+input, textarea, select, button { font-family: var(--font); }
+a { color: inherit; text-decoration: none; }
+
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.15); }
