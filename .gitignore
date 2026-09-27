@@ -20,6 +20,9 @@ dist/
 build/
 *.egg-info/
 
+# Frontend dependencies
+node_modules/
+
 # IDE
 .vscode/
 .idea/
