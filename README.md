@@ -1,349 +1,312 @@
+# TruthLens: Fake News and Misinformation Detection System
 
-# 🔍 TruthLens — Fake News & Misinformation Detection System
+TruthLens is a full-stack machine-learning application for analysing news articles and social-media-style posts. It predicts whether submitted text is `FAKE`, `REAL`, or `UNCERTAIN`, displays confidence and probabilities, explains the prediction, evaluates the source, and stores results for later review.
 
-> **Intra-IIT Hackathon 2026** | Track: NLP / Trust & Safety | Non-Agentic AI/ML System
+This project was created for the **Intra-IIT Hackathon 2026**, under the **NLP / Trust and Safety** track. It is a decision-support tool, not a replacement for professional fact-checking.
 
-[![Python](https://img.shields.io/badge/Python-3.9+-blue.svg)](https://python.org)
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.111-green.svg)](https://fastapi.tiangolo.com)
-[![scikit-learn](https://img.shields.io/badge/scikit--learn-1.5-orange.svg)](https://scikit-learn.org)
-[![License](https://img.shields.io/badge/License-MIT-purple.svg)](LICENSE)
+## What The Application Does
 
----
+The application has two parts:
 
-## 📋 Overview
+- **React + Vite frontend:** the web interface at `http://localhost:5173`.
+- **FastAPI backend:** the machine-learning API at `http://localhost:8000`.
 
-**TruthLens** is a full-stack AI-powered system for detecting fake news and misinformation in news articles and social media posts. It provides:
+The main workflow is:
 
-- **ML Classification** with calibrated confidence scores
-- **Explainability** via feature importance (SHAP-based and heuristic)
-- **Source Credibility Scoring** based on historical publishing patterns
-- **Human-in-the-Loop Review Workflow** for journalists and fact-checkers
-- **Batch Analysis** of CSV datasets
-- **Beautiful Dark UI Dashboard** with real-time stats
+1. A user enters an article title, article text, URL, source, and author.
+2. The backend combines the title and text and runs the saved ML model.
+3. The system returns a label, confidence, fake/real probabilities, linguistic features, text highlights, source credibility, and important factors.
+4. The article and prediction are saved in a local SQLite database.
+5. A reviewer can confirm, dismiss, or relabel the prediction.
 
----
+The interface includes:
 
-## 🏗️ Architecture
+- **Analyze:** analyse one article or post and inspect the explanation.
+- **Dashboard:** browse previous predictions and review statuses.
+- **Batch:** upload a CSV and analyse many records.
+- **Sources:** inspect source history and credibility scores.
+- **Metrics:** view model evaluation metrics and failure examples.
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                        TruthLens System                         │
-├────────────────────────┬────────────────────────────────────────┤
-│      Frontend          │             Backend                    │
-│   HTML/CSS/Vanilla JS  │         FastAPI + SQLite               │
-│                        │                                        │
-│  ┌─────────────────┐   │   ┌─────────────────────────────────┐  │
-│  │ Analyze Page    │◄──┼──►│ POST /api/v1/analyze           │  │
-│  │ Dashboard       │   │   │ GET  /api/v1/dashboard          │  │
-│  │ Batch Upload    │   │   │ POST /api/v1/batch/analyze      │  │
-│  │ Source Scores   │   │   │ POST /api/v1/feedback           │  │
-│  │ Metrics Report  │   │   │ GET  /api/v1/metrics            │  │
-│  └─────────────────┘   │   │ POST /api/v1/train              │  │
-│                        │   └──────────────┬──────────────────┘  │
-│                        │                  │                     │
-│                        │   ┌──────────────▼──────────────────┐  │
-│                        │   │          ML Pipeline            │  │
-│                        │   │  Preprocessor → Features        │  │
-│                        │   │  TF-IDF + LogReg (Calibrated)   │  │
-│                        │   │  SHAP Explainer                 │  │
-│                        │   │  Source Credibility Scorer      │  │
-│                        │   └──────────────┬──────────────────┘  │
-│                        │                  │                     │
-│                        │   ┌──────────────▼──────────────────┐  │
-│                        │   │      SQLite Database            │  │
-│                        │   │  articles | predictions         │  │
-│                        │   │  feedback | source_credibility  │  │
-│                        │   │  batch_jobs                     │  │
-│                        │   └─────────────────────────────────┘  │
-└────────────────────────┴────────────────────────────────────────┘
-```
+## Technology Used
 
----
+- Python 3.10 or 3.11 recommended
+- FastAPI and Uvicorn
+- React 18 and Vite
+- scikit-learn TF-IDF and logistic regression model
+- SHAP-based explainability with a fallback feature explanation
+- NLTK, VADER, TextBlob, and textstat for language features
+- SQLAlchemy with SQLite for local persistence
 
-## 📁 Project Structure
+## Repository Contents
 
-```
+```text
 INTRA-IIT-FAKE-NEWS-MISINFORMATION-DETECTION-SYSTEM/
 ├── backend/
 │   ├── app/
-│   │   ├── main.py                  # FastAPI app entry + lifespan
-│   │   ├── api/
-│   │   │   └── routes.py            # All REST API endpoints
+│   │   ├── main.py                  FastAPI application and startup logic
+│   │   ├── api/routes.py             REST API endpoints
 │   │   ├── core/
-│   │   │   ├── preprocessor.py      # Text cleaning & tokenization
-│   │   │   ├── feature_extractor.py # Linguistic feature engineering
-│   │   │   ├── model.py             # ML model training & inference
-│   │   │   ├── explainer.py         # SHAP + text highlights
-│   │   │   ├── credibility.py       # Source credibility scoring
-│   │   │   └── data_loader.py       # Sample dataset generation
+│   │   │   ├── preprocessor.py      Text cleaning and preprocessing
+│   │   │   ├── feature_extractor.py Linguistic and sentiment features
+│   │   │   ├── model.py             Model loading, training, and prediction
+│   │   │   ├── explainer.py         Explanations and suspicious text highlights
+│   │   │   ├── credibility.py       Source credibility evaluation
+│   │   │   └── data_loader.py       Sample dataset loading
 │   │   ├── db/
-│   │   │   ├── session.py           # SQLAlchemy session management
-│   │   │   └── models.py            # ORM models
-│   │   └── schemas/
-│   │       └── schemas.py           # Pydantic request/response schemas
-│   ├── models/                      # Saved model artifacts (.joblib)
-│   ├── data/                        # Data files
-│   └── requirements.txt
-├── frontend/                        # Modern React + Vite Application
+│   │   │   ├── database.py          SQLite connection and initialization
+│   │   │   └── models.py            Database tables
+│   │   └── schemas/schemas.py        API request and response schemas
+│   ├── data/sample_dataset.csv       Included sample training data
+│   ├── models/
+│   │   ├── fake_news_model.joblib    Saved classifier
+│   │   ├── tfidf_vectorizer.joblib   Saved text vectorizer
+│   │   └── metrics.json              Saved evaluation metrics
+│   └── requirements.txt              Python dependencies
+├── frontend/
 │   ├── src/
-│   │   ├── api/client.js            # Axios client with Vite proxy
-│   │   ├── components/              # Layout, Cards, Nav
-│   │   ├── pages/                   # Analyze, Dashboard, Batch, Sources, Metrics
-│   │   ├── App.jsx                  # React Router SPA root
-│   │   ├── main.jsx
-│   │   └── index.css                # Global modern dark design system
-│   ├── package.json
-│   └── vite.config.js               # Dev server & API proxy
-├── run_backend.bat                  # One-click backend launcher (auto frees port 8000)
-├── run_frontend.bat                 # One-click React frontend launcher
-├── start_all.bat                    # Master launcher (starts both & opens browser)
-└── README.md
+│   │   ├── api/client.js             Frontend API client
+│   │   ├── components/               Shared layout and card components
+│   │   └── pages/                    Analyze, dashboard, batch, source, metrics pages
+│   ├── package.json                  JavaScript dependencies and scripts
+│   └── vite.config.js                Port and backend proxy configuration
+├── run_backend.bat                   Windows backend launcher
+├── run_frontend.bat                  Windows frontend launcher
+├── start_all.bat                     Windows launcher for both services
+├── start.bat                         Windows backend setup and launcher
+└── README.md                         This guide
 ```
 
----
+`frontend/node_modules/`, Python virtual environments, caches, and the generated database are intentionally not stored in Git. They are created locally during setup or first use.
 
-## 🚀 Quick Start (Exact Links & Commands)
+## Requirements
 
-### ⚡ One-Click Launch (Recommended)
-Simply double-click `start_all.bat` (or run `./start_all.bat` in terminal). It will:
-1. Start the FastAPI backend on port 8000
-2. Start the React frontend on port 5173
-3. Automatically open your browser to **http://localhost:5173**
+Before cloning or running the project, install:
 
----
+1. **Git:** https://git-scm.com/downloads
+2. **Python 3.10 or 3.11:** https://www.python.org/downloads/
+3. **Node.js 18 or newer:** https://nodejs.org/
 
-### 🖥️ Manual Startup (Two Terminals)
+During Python installation on Windows, enable **Add Python to PATH**. After installation, verify the tools in PowerShell:
 
-#### Terminal 1 — Start the Backend:
 ```powershell
+git --version
+python --version
+node --version
+npm --version
+```
+
+## Evaluator Setup After Cloning
+
+These are the complete steps for a fresh Windows computer.
+
+### 1. Clone the repository
+
+Open PowerShell and run:
+
+```powershell
+git clone https://github.com/nithishgouds/INTRA-IIT-FAKE-NEWS-MISINFORMATION-DETECTION-SYSTEM.git
+cd INTRA-IIT-FAKE-NEWS-MISINFORMATION-DETECTION-SYSTEM
+```
+
+### 2. Create and activate the Python environment
+
+Run these commands from the project root:
+
+```powershell
+python -m venv backend\.venv
+backend\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+python -m pip install -r backend\requirements.txt
+```
+
+If PowerShell blocks environment activation, run this once in the same PowerShell window and then activate again:
+
+```powershell
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+backend\.venv\Scripts\Activate.ps1
+```
+
+### 3. Install frontend dependencies
+
+Open a second PowerShell window, move to the project root, and run:
+
+```powershell
+cd path\to\INTRA-IIT-FAKE-NEWS-MISINFORMATION-DETECTION-SYSTEM
+cd frontend
+npm install
+```
+
+This creates the local `frontend/node_modules` folder. It is required to run the frontend but is not committed to Git.
+
+### 4. Start the application
+
+The simplest option is to return to the project root and double-click `start_all.bat`, or run:
+
+```powershell
+cd path\to\INTRA-IIT-FAKE-NEWS-MISINFORMATION-DETECTION-SYSTEM
+.\start_all.bat
+```
+
+If PowerShell does not accept that command, use:
+
+```powershell
+cmd /c start_all.bat
+```
+
+The launcher opens two command windows, starts both services, and opens the browser at:
+
+**http://localhost:5173**
+
+Keep both command windows open while using the application.
+
+## Manual Startup
+
+Manual startup is useful if the evaluator wants to see backend and frontend logs separately.
+
+### Terminal 1: backend
+
+```powershell
+cd path\to\INTRA-IIT-FAKE-NEWS-MISINFORMATION-DETECTION-SYSTEM
+backend\.venv\Scripts\Activate.ps1
 cd backend
 python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
-- **Backend API URL**: [http://localhost:8000](http://localhost:8000)
-- **Interactive Swagger Docs**: [http://localhost:8000/docs](http://localhost:8000/docs)
-- **Health Check**: [http://localhost:8000/health](http://localhost:8000/health)
 
-#### Terminal 2 — Start the React Frontend:
+### Terminal 2: frontend
+
 ```powershell
-cd frontend
+cd path\to\INTRA-IIT-FAKE-NEWS-MISINFORMATION-DETECTION-SYSTEM\frontend
 npm run dev
 ```
-- **React Web Application**: [http://localhost:5173](http://localhost:5173)
 
----
+Then open **http://localhost:5173** in a browser.
 
-## 🌐 API Reference
+The important URLs are:
 
-The backend exposes a full REST API at `http://localhost:8000`.
+| URL | Purpose |
+|---|---|
+| http://localhost:5173 | Main TruthLens web application |
+| http://localhost:8000 | Backend root/status information |
+| http://localhost:8000/docs | Interactive Swagger API documentation |
+| http://localhost:8000/health | Backend health and model status |
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `POST` | `/api/v1/analyze` | Analyze a single article |
-| `GET` | `/api/v1/dashboard` | Get paginated review queue |
-| `GET` | `/api/v1/predictions/{id}` | Get detailed prediction |
-| `POST` | `/api/v1/feedback` | Submit reviewer feedback |
-| `POST` | `/api/v1/batch/analyze` | Upload CSV for batch analysis |
-| `GET` | `/api/v1/batch/jobs` | List all batch jobs |
-| `GET` | `/api/v1/sources` | Get source credibility profiles |
-| `POST` | `/api/v1/train` | Trigger model retraining |
-| `GET` | `/api/v1/metrics` | Get evaluation metrics |
-| `GET` | `/api/v1/export/csv` | Export results as CSV |
+## First Evaluation Walkthrough
 
-**Interactive API Docs:** `http://localhost:8000/docs`
+After the page opens:
 
----
+1. Open **Analyze**.
+2. Enter an article with at least 10 characters in the text field, or use one of the sample buttons.
+3. Optionally add a title, source such as `reuters.com`, URL, and author.
+4. Submit the article.
+5. Inspect the verdict, confidence, fake/real probability bars, source evaluation, highlighted text, and explanation factors.
+6. Open **Dashboard** to see the saved prediction.
+7. Use the review controls to confirm, dismiss, or relabel the prediction.
+8. Open **Sources** to see source history.
+9. Open **Metrics** to see the saved model metrics.
+10. Open **Batch** to upload a CSV and test multiple articles.
 
-## 🧠 ML Pipeline
+The included sample model is loaded automatically from `backend/models`. If those files are unavailable, the backend attempts to train on `backend/data/sample_dataset.csv` during startup.
 
-### 1. Text Preprocessing
-- Lowercase normalization
-- URL, email, and HTML tag removal
-- Stopword removal + lemmatization (NLTK WordNetLemmatizer)
+## Batch CSV Format
 
-### 2. Feature Engineering
-**Sentiment Features** (VADER + TextBlob):
-- Compound, positive, negative, neutral sentiment
-- Text polarity and subjectivity scores
+The batch upload accepts a CSV with a `text` column. The following columns are supported:
 
-**Readability Features** (textstat):
-- Flesch Reading Ease, Kincaid Grade Level
-- Gunning Fog, SMOG, Coleman-Liau indexes
-
-**Stylistic Features**:
-- Word count, sentence count, avg word length
-- CAPS ratio, exclamation/question marks
-- Sensational word ratio (custom lexicon)
-- Hedge word count, strong modal assertions
-- Unique word (vocabulary diversity) ratio
-- Stopword ratio, URL presence
-
-**Source Credibility**:
-- Laplace-smoothed credibility score from publishing history
-- Seed data for known reliable/unreliable sources
-
-### 3. Classification Model
-- **TF-IDF Vectorizer** (20,000 features, unigrams + bigrams, sublinear TF)
-- **Logistic Regression** (L2 regularization, class-balanced, calibrated probabilities)
-- **Combined features**: TF-IDF + 29 handcrafted linguistic features
-- **Confidence thresholds**: `FAKE (≥65%)`, `REAL (≤35%)`, `UNCERTAIN` otherwise
-
-### 4. Explainability Layer
-- **SHAP LinearExplainer** for feature attribution on trained model
-- **Feature-weight heuristics** as fallback when SHAP unavailable
-- **Text span highlighting**: identifies sensational words, hedge language, CAPS
-- Top-N feature display with impact direction (→ Fake / → Real)
-
-### 5. Source Credibility Scoring
-- Tracks every source analyzed in SQLite
-- Laplace smoothing: `score = (real + 2) / (total + 4)`
-- Seed credibility for 20+ known reliable/unreliable sources
-- Updates after every prediction
-
----
-
-## 📊 Evaluation Metrics
-
-After training, the system reports:
-- **Accuracy**, **Precision**, **Recall**, **F1 Score**, **AUC-ROC**
-- **Confusion Matrix** (TP, TN, FP, FN breakdown)
-- **Failure Case Analysis** (sample false positives and false negatives)
-
-Metrics are accessible via the **Metrics** page in the UI or `/api/v1/metrics`.
-
----
-
-## 🖥️ UI Features
-
-### 📝 Content Analysis Page
-- Text input with character/word count
-- "Try Sample" buttons (real news / fake news)
-- Verdict display: **FAKE / REAL / UNCERTAIN** with confidence gauge
-- Probability bars (real vs fake)
-- **Text highlighting**: color-coded suspicious spans
-- Feature importance chart (top 10 factors)
-- Linguistic profile grid (8 key metrics)
-- **Human-in-the-Loop feedback**: Confirm / Dismiss / Relabel
-
-### 📋 Review Dashboard
-- Live stats: total, fake, real, pending review
-- Sortable/filterable table (by label, status, source, date, risk score)
-- Color-coded prediction badges
-- Quick "View →" modal with full detail + feedback history
-- CSV export button
-
-### 📤 Batch Analysis
-- Drag-and-drop CSV upload
-- Animated progress bar
-- Batch results summary (pie-chart-style breakdown)
-- Batch job history with status tracking
-
-### 🛡️ Source Credibility
-- Credibility profiles for all analyzed sources
-- Visual credibility bars (color-coded: green/yellow/red)
-- Article count, fake/real breakdown
-
-### 📈 Model Metrics
-- Accuracy, F1, Precision, Recall, AUC displayed as big-number cards
-- Confusion matrix visualization
-- False positive/negative failure case examples
-
----
-
-## 📦 Datasets
-
-The system is compatible with these public datasets (not included due to size):
-
-| Dataset | Description | Download |
-|---------|-------------|----------|
-| **LIAR** | Politifact labeled statements | [LIAR Dataset](https://paperswithcode.com/dataset/liar) |
-| **FakeNewsNet** | PolitiFact + GossipCop | [FakeNewsNet](https://github.com/KaiDMML/FakeNewsNet) |
-| **ISOT** | News article dataset | [ISOT Dataset](https://onlineacademiccommunity.uvic.ca/isot/) |
-
-**Using a real dataset:**
-```python
-# In backend/app/core/data_loader.py, replace load_sample_data() 
-# to load from your CSV:
-import pandas as pd
-
-def load_sample_data():
-    df = pd.read_csv("data/your_dataset.csv")
-    texts = df['text'].tolist()
-    labels = df['label'].map({'fake': 1, 'real': 0, 'FAKE': 1, 'REAL': 0}).tolist()
-    sources = df.get('source', pd.Series([''] * len(df))).tolist()
-    return texts, labels, sources
+```csv
+title,text,source,author,url
+Example title,"Example article text with at least ten characters.",example.com,Example Author,https://example.com/article
 ```
 
----
+`text` is the important required column. `title`, `source`, `author`, and `url` are optional. The included file `backend/data/sample_dataset.csv` shows the sample dataset format; its `label` column is useful for training/evaluation data but is not needed for a new prediction upload.
 
-## 💬 Human-in-the-Loop Workflow
+## API Quick Reference
 
+All application endpoints are under `/api/v1`:
+
+| Method | Endpoint | Purpose |
+|---|---|---|
+| `POST` | `/analyze` | Analyse one article or post |
+| `GET` | `/dashboard` | List saved predictions and summary statistics |
+| `GET` | `/predictions/{id}` | View one prediction in detail |
+| `POST` | `/feedback` | Confirm, dismiss, or relabel a prediction |
+| `POST` | `/batch/analyze` | Upload a CSV for batch analysis |
+| `GET` | `/batch/jobs` | List batch jobs |
+| `GET` | `/sources` | List source credibility records |
+| `GET` | `/metrics` | Return model metrics |
+| `POST` | `/train` | Retrain the model using the supported training flow |
+| `GET` | `/export/csv` | Export stored results as CSV |
+
+Example request for one article:
+
+```powershell
+Invoke-RestMethod `
+  -Uri http://localhost:8000/api/v1/analyze `
+  -Method Post `
+  -ContentType "application/json" `
+  -Body '{"title":"Example article","text":"This is an example article containing enough text for analysis.","source":"example.com"}'
 ```
-Article Submitted
-       │
-       ▼
-  ML Prediction
-  (FAKE/REAL/UNCERTAIN + Confidence)
-       │
-       ▼
-  Reviewer Dashboard
-  (Prioritized queue by risk score)
-       │
-       ├─► Confirm: ML prediction was correct
-       ├─► Dismiss: Flag is incorrect (not fake news)
-       └─► Relabel: Assign correct label + optional note
-              │
-              ▼
-       Feedback stored in DB
-       (Never overwrites original prediction)
-              │
-              ▼
-       Available for model retraining
-       (POST /api/v1/train includes feedback)
-```
 
----
+The complete request and response schemas are available at `http://localhost:8000/docs`.
 
-## ⚠️ Responsible Use
+## How The Prediction Works
 
-- Model predictions are **probabilistic estimates**, not definitive proof
-- Source credibility scores reflect **dataset patterns**, not absolute trustworthiness
-- Avoid using this system as the sole arbiter of content truthfulness
-- Always have human reviewers make final decisions
-- The system clearly distinguishes **model predictions** from **verified facts**
+The system combines several signals:
 
----
+1. **Preprocessing:** normalises text and removes or handles URLs, email addresses, HTML, stopwords, and word forms.
+2. **TF-IDF text features:** represents important unigrams and bigrams from the text.
+3. **Linguistic features:** includes sentiment, readability, word counts, punctuation, capitalisation, sensational language, hedging, and vocabulary diversity.
+4. **Classifier:** uses the saved scikit-learn model to estimate fake and real probabilities.
+5. **Decision label:** returns `FAKE`, `REAL`, or `UNCERTAIN` based on the configured confidence thresholds.
+6. **Explainability:** uses SHAP when available and falls back to feature-weight explanations when necessary.
+7. **Source evaluation:** estimates source credibility using source history and known seed patterns.
 
-## 🔮 Optional Extensions (Implemented as Stretch Goals)
+The output is a model estimate. A `FAKE` result does not prove that an article is false, and a `REAL` result does not prove that it is true.
 
-- [x] Batch CSV analysis with drag-and-drop
-- [x] CSV export of analysis results
-- [x] Source history visualization
-- [x] Reviewer feedback logging for retraining
-- [x] Text span highlighting for suspicious language
-- [ ] Browser extension (out of scope for this submission)
-- [ ] Side-by-side article comparison
-- [ ] Multilingual support
+## Data And Local Files
 
----
+- `backend/models/*.joblib` and `backend/models/metrics.json` are committed runtime artifacts, so a fresh clone can use the same saved model.
+- `backend/data/sample_dataset.csv` is included sample data.
+- `backend/fakenews.db` is created automatically when the backend starts. It stores articles, predictions, feedback, source history, and batch jobs.
+- The database is local and is intentionally ignored by Git. Delete `backend/fakenews.db` to reset local application history.
+- `frontend/node_modules` is generated by `npm install` and is intentionally ignored by Git.
 
-## 🏆 Judging Criteria Coverage
+## Troubleshooting
 
-| Criterion | Coverage |
-|-----------|----------|
-| **Solution Idea & Innovation (15%)** | TF-IDF + LogReg + SHAP + source credibility scoring + human-in-the-loop |
-| **Code Structure & Architecture (30%)** | Clean layered FastAPI + modular ML pipeline + SQLite persistence |
-| **Demo Explanation (20%)** | Full UI with explanation panel, feature importance, text highlighting |
-| **Output Accuracy (15%)** | Calibrated probabilities + evaluated metrics (accuracy, F1, AUC-ROC) |
-| **Product Usability (20%)** | Premium dark UI, reviewer dashboard, batch analysis, feedback workflow |
+### `python` is not recognized
 
----
+Install Python and enable **Add Python to PATH**, then reopen PowerShell. On some systems, use `py` instead of `python`.
 
-## 👥 Team
+### `npm` is not recognized
 
-**Intra-IIT Hackathon 2026** | Track: NLP / Trust & Safety
+Install Node.js, reopen PowerShell, and verify with `node --version` and `npm --version`.
 
----
+### Port 8000 or 5173 is already in use
 
-## 📄 License
+Stop the process using that port, then restart the relevant service. `run_backend.bat` attempts to free port 8000 automatically. The frontend is configured for port 5173.
 
-MIT License — see [LICENSE](LICENSE) for details.
+### The frontend says it cannot reach the API
+
+Check that the backend terminal is still running and that `http://localhost:8000/health` opens successfully. The Vite development server proxies `/api` and `/health` requests to port 8000.
+
+### The browser opens but the page is blank
+
+Stop the frontend with `Ctrl+C`, run `npm install` inside `frontend`, and start it again with `npm run dev`. Check the frontend terminal for build errors.
+
+### Model loading or SHAP errors appear
+
+Confirm that the three files in `backend/models` exist and that the virtual environment was installed from `backend/requirements.txt`. The backend has a fallback path and can train from the included sample data when a saved model cannot be loaded.
+
+### How to stop the application
+
+Press `Ctrl+C` in each running terminal. If `start_all.bat` opened separate windows, close those windows after stopping the servers.
+
+## Responsible Use
+
+- Treat every prediction as a probabilistic signal, not a verified fact.
+- Use human review before publishing, removing, or escalating content.
+- Source credibility is based on observed history and seed data; it is not an absolute ranking of a publisher.
+- Do not use the system as the sole decision-maker for high-impact or safety-critical situations.
+
+## Team And Context
+
+**Intra-IIT Hackathon 2026**
+Track: **NLP / Trust and Safety**
