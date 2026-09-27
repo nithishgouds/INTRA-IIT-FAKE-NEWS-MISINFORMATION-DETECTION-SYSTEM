@@ -12,7 +12,8 @@ from app.db.models import Article, Prediction, Feedback, BatchJob
 from app.core import model as ml_model
 from app.core.explainer import explain_with_shap, highlight_suspicious_text, get_top_features
 from app.core.credibility import (
-    get_source_credibility, update_source_credibility, get_seed_credibility, get_all_sources
+    get_source_credibility, update_source_credibility, get_seed_credibility,
+    get_all_sources, evaluate_source_credibility
 )
 from app.schemas.schemas import (
     AnalyzeRequest, AnalyzeResponse, FeedbackRequest, FeedbackResponse,
@@ -26,35 +27,50 @@ router = APIRouter()
 @router.post("/analyze", response_model=dict)
 async def analyze_article(request: AnalyzeRequest, db: Session = Depends(get_db)):
     """Analyze a single article/post for misinformation."""
-    
-    # Get source credibility
-    db_cred = get_source_credibility(db, request.source)
-    seed_cred = get_seed_credibility(request.source)
-    # Combine: if db has enough history use that, otherwise use seed
-    source_cred = (db_cred + seed_cred) / 2
-    
+
+    # ── Build canonical analyzed_text (title + body, no duplication) ──────────
+    title_str = (request.title or "").strip()
+    body_str   = (request.text  or "").strip()
+
+    if title_str and body_str:
+        # Avoid repeating the title if the body already starts with it (case-insensitive)
+        if body_str.lower().startswith(title_str.lower()):
+            analyzed_text = body_str
+        else:
+            analyzed_text = title_str + "\n" + body_str
+    elif title_str:
+        analyzed_text = title_str
+    else:
+        analyzed_text = body_str
+    # ──────────────────────────────────────────────────────────────────────────
+
+    # Comprehensive Source & Domain Evaluation (Anchored to URL domain)
+    url_str = str(request.url) if request.url else None
+    source_eval = evaluate_source_credibility(source_name=request.source, url=url_str)
+    final_credibility = source_eval["credibility_score"]
+
     # Store article
     article = Article(
         title=request.title,
         text=request.text,
-        url=str(request.url) if request.url else None,
+        url=url_str,
         source=request.source,
         author=request.author,
     )
     db.add(article)
     db.commit()
     db.refresh(article)
-    
-    # Run ML prediction
-    result = ml_model.predict(request.text, source=request.source or "")
+
+    # Run ML prediction on the combined analyzed_text
+    result = ml_model.predict(analyzed_text, source=request.source or "", source_credibility=final_credibility)
     features = result["features"]
-    
+
     # Generate explanation
     _model = ml_model._model
     _vectorizer = ml_model._vectorizer
-    
+
     if _model and _vectorizer:
-        explanation = explain_with_shap(_model, _vectorizer, request.text, request.source or "")
+        explanation = explain_with_shap(_model, _vectorizer, analyzed_text, request.source or "", source_credibility=final_credibility)
     else:
         top_feats = get_top_features(features)
         explanation = {
@@ -62,10 +78,10 @@ async def analyze_article(request: AnalyzeRequest, db: Session = Depends(get_db)
             "top_features": top_feats,
             "shap_values": None,
         }
-    
-    # Text highlights
-    highlights = highlight_suspicious_text(request.text, features)
-    
+
+    # Text highlights based on the combined analyzed_text
+    highlights = highlight_suspicious_text(analyzed_text, features)
+
     # Store prediction
     prediction = Prediction(
         article_id=article.id,
@@ -76,7 +92,7 @@ async def analyze_article(request: AnalyzeRequest, db: Session = Depends(get_db)
         sentiment_score=features.get("vader_compound"),
         subjectivity_score=features.get("textblob_subjectivity"),
         readability_score=features.get("flesch_reading_ease"),
-        source_credibility_score=source_cred,
+        source_credibility_score=final_credibility,
         linguistic_features={k: round(float(v), 4) for k, v in features.items()},
         top_features=explanation.get("top_features", []),
         model_version=result["model_version"],
@@ -84,16 +100,17 @@ async def analyze_article(request: AnalyzeRequest, db: Session = Depends(get_db)
     db.add(prediction)
     db.commit()
     db.refresh(prediction)
-    
+
     # Update source credibility with this prediction
     if request.source:
         update_source_credibility(db, request.source, result["label"])
-    
+
     return {
         "article": {
             "id": article.id,
             "title": article.title,
             "text": article.text,
+            "analyzed_text": analyzed_text,   # ← exact text evaluated by the model
             "source": article.source,
             "author": article.author,
             "url": article.url,
@@ -113,6 +130,7 @@ async def analyze_article(request: AnalyzeRequest, db: Session = Depends(get_db)
             "predicted_at": prediction.predicted_at.isoformat(),
             "model_version": prediction.model_version,
         },
+        "source_evaluation": source_eval,
         "explanation": explanation,
         "highlights": highlights,
         "linguistic_features": features,

@@ -1,6 +1,6 @@
 .layout {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr 1.15fr;
   gap: 20px;
   align-items: start;
 }
@@ -21,13 +21,14 @@
 .sampleBtn {
   display: flex; align-items: center; gap: 5px;
   padding: 5px 12px; border-radius: 999px;
-  font-size: 0.73rem; font-weight: 600;
+  font-size: 0.72rem; font-weight: 600;
   cursor: pointer; border: 1px solid var(--border);
   background: var(--bg-card); color: var(--text-secondary);
   transition: all var(--transition);
 }
 .sampleReal:hover { background: var(--real-bg); border-color: var(--real-border); color: var(--real); }
 .sampleFake:hover { background: var(--fake-bg); border-color: var(--fake-border); color: var(--fake); }
+.sampleAdv:hover { background: rgba(168,85,247,0.15); border-color: rgba(168,85,247,0.3); color: #c084fc; }
 
 /* ─── Form fields ─── */
 .field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
@@ -105,11 +106,11 @@
   flex-shrink: 0;
 }
 .verdictInfo { flex: 1; }
-.verdictLabel { font-size: 1.1rem; font-weight: 800; letter-spacing: -0.02em; margin-bottom: 3px; }
-.verdictSub { font-size: 0.75rem; color: var(--text-muted); }
+.verdictLabel { font-size: 1.15rem; font-weight: 800; letter-spacing: -0.02em; margin-bottom: 3px; }
+.verdictSub { font-size: 0.76rem; color: var(--text-muted); line-height: 1.4; }
 .confBadge { text-align: right; flex-shrink: 0; }
 .confVal { display: block; font-size: 1.5rem; font-weight: 900; font-family: var(--mono); }
-.confLabel { font-size: 0.68rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.06em; }
+.confLabel { font-size: 0.65rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.06em; }
 
 .probBars { display: flex; flex-direction: column; gap: 10px; margin-bottom: 14px; }
 .probBarRow { display: flex; flex-direction: column; gap: 5px; }
@@ -118,24 +119,81 @@
 .probFill { height: 100%; border-radius: 99px; }
 
 .disclaimer {
-  font-size: 0.68rem; color: var(--text-disabled);
+  font-size: 0.7rem; color: var(--text-disabled);
   border-top: 1px solid rgba(255,255,255,0.05); padding-top: 10px;
+  line-height: 1.5;
+}
+
+/* ─── Source Evaluation Card ─── */
+.sourceEvalCard {
+  background: rgba(15,23,42,0.6);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: var(--radius-sm);
+  padding: 14px;
+}
+.sourceTopRow {
+  display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; flex-wrap: wrap; gap: 8px;
+}
+.sourceName { font-size: 0.88rem; font-weight: 700; color: var(--text-primary); }
+.sourceTier {
+  font-size: 0.68rem; font-weight: 700; padding: 2px 8px; border-radius: 999px;
+  border: 1px solid;
+}
+.sourceScoreRow {
+  display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;
+}
+.sourceScoreLabel { font-size: 0.74rem; color: var(--text-muted); }
+.sourceScoreVal { font-family: var(--mono); font-weight: 700; font-size: 0.88rem; }
+.sourceDesc { font-size: 0.72rem; color: var(--text-muted); line-height: 1.4; margin-top: 6px; }
+.sourceNotice {
+  font-size: 0.68rem; color: var(--text-disabled); margin-top: 6px; font-style: italic;
+}
+
+.mismatchAlert {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+  margin-bottom: 12px;
+  color: #fca5a5;
+  font-size: 0.76rem;
+  line-height: 1.45;
+}
+.mismatchIcon {
+  color: #ef4444;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+.mismatchAlert strong {
+  color: #f87171;
+  display: block;
+  margin-bottom: 2px;
 }
 
 /* ─── Highlights ─── */
 .hlLegend {
-  display: flex; gap: 14px; margin-bottom: 12px; flex-wrap: wrap;
+  display: flex; gap: 10px; margin-bottom: 12px; flex-wrap: wrap;
 }
 .hlLegend span {
   display: flex; align-items: center; gap: 5px;
-  font-size: 0.7rem; color: var(--text-muted);
+  font-size: 0.72rem; color: var(--text-secondary);
+  background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06);
+  padding: 3px 8px; border-radius: 999px;
 }
 .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
-.hlText { font-size: 0.82rem; line-height: 1.8; color: var(--text-secondary); }
-.hlSpan { border-radius: 3px; padding: 1px 2px; cursor: default; transition: filter 0.15s; }
+.noHlNotice {
+  display: flex; align-items: center; gap: 6px; font-size: 0.76rem;
+  color: var(--real); background: var(--real-bg); border: 1px solid var(--real-border);
+  padding: 8px 12px; border-radius: var(--radius-sm); margin-bottom: 10px;
+}
+.hlText { font-size: 0.84rem; line-height: 1.8; color: var(--text-secondary); }
+.hlSpan { border-radius: 3px; padding: 2px 4px; cursor: default; transition: filter 0.15s; font-weight: 600; }
 .hlSpan:hover { filter: brightness(1.3); }
 
-/* ─── Features ─── */
+/* ─── Features / SHAP ─── */
 .featureHeader {
   display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px;
 }
@@ -146,16 +204,16 @@
   background: var(--primary-glow); border: 1px solid rgba(99,102,241,0.2);
   color: var(--primary-light);
 }
-.featureList { display: flex; flex-direction: column; gap: 10px; }
+.featureList { display: flex; flex-direction: column; gap: 12px; }
 .featureItem { display: flex; flex-direction: column; gap: 4px; }
 .featureRow { display: flex; align-items: center; justify-content: space-between; }
-.featureName { font-size: 0.78rem; color: var(--text-secondary); }
-.featureTag {
-  font-size: 0.65rem; font-weight: 700; border: 1px solid; border-radius: 999px; padding: 2px 8px;
+.featureName { font-size: 0.78rem; font-weight: 600; color: var(--text-primary); }
+.featureContribution {
+  font-size: 0.7rem; font-weight: 700; font-family: var(--mono);
 }
-.featureTrack { height: 5px; background: rgba(255,255,255,0.05); border-radius: 99px; overflow: hidden; }
+.featureTrack { height: 6px; background: rgba(255,255,255,0.05); border-radius: 99px; overflow: hidden; margin-top: 2px; }
 .featureFill { height: 100%; border-radius: 99px; }
-.featureDesc { font-size: 0.66rem; color: var(--text-disabled); }
+.featureDesc { font-size: 0.67rem; color: var(--text-disabled); line-height: 1.35; }
 
 /* ─── Linguistics grid ─── */
 .metricsGrid {

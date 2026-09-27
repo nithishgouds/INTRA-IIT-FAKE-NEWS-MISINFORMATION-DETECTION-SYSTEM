@@ -1,6 +1,6 @@
 """
 Feature Engineering module for Fake News Detection System
-Extracts linguistic, sentiment, readability, and stylistic features.
+Extracts length-invariant linguistic, sentiment, readability, and stylistic density features.
 """
 import re
 import numpy as np
@@ -31,23 +31,19 @@ from app.core.preprocessor import (
     count_question_marks, get_stopword_ratio, get_unique_word_ratio
 )
 
-# Sensational / clickbait words often found in fake news
+# Sensational / clickbait phrases
 SENSATIONAL_WORDS = {
-    "shocking", "unbelievable", "incredible", "secret", "exposed", "breaking",
-    "urgent", "exclusive", "bombshell", "scandal", "outrage", "disgusting",
-    "destroy", "conspiracy", "hoax", "fraud", "lies", "truth", "wake up",
-    "share", "must see", "you won't believe", "they don't want you to know",
-    "mainstream media", "deep state", "fake", "crisis actor"
+    "shocking", "unbelievable", "bombshell", "secret exposed", "mind-blowing",
+    "you won't believe", "they don't want you to know", "wake up people",
+    "must share", "miracle cure", "deep state", "crisis actor",
+    "bizarre secret", "conspiracy exposed", "mainstream media coverup"
 }
 
+# Speculative hedge indicators
 HEDGE_WORDS = {
-    "allegedly", "reportedly", "claimed", "said to", "sources say",
-    "some say", "rumor", "unverified", "perhaps", "maybe", "possibly"
-}
-
-STRONG_MODAL_WORDS = {
-    "definitely", "certainly", "absolutely", "undoubtedly", "clearly",
-    "obviously", "everyone knows", "always", "never", "all", "none"
+    "allegedly", "reportedly", "unconfirmed", "unverified", "rumored",
+    "supposedly", "purportedly", "anonymous sources", "sources claim",
+    "unsubstantiated", "speculated"
 }
 
 
@@ -78,65 +74,61 @@ def extract_readability_features(text: str) -> Dict[str, float]:
     """Readability scores via textstat."""
     features = {
         "flesch_reading_ease": 50.0,
-        "flesch_kincaid_grade": 8.0,
-        "gunning_fog": 10.0,
-        "smog_index": 8.0,
-        "automated_readability_index": 8.0,
-        "coleman_liau_index": 10.0,
     }
     if HAS_TEXTSTAT and text:
         try:
-            features["flesch_reading_ease"] = textstat.flesch_reading_ease(text)
-            features["flesch_kincaid_grade"] = textstat.flesch_kincaid_grade(text)
-            features["gunning_fog"] = textstat.gunning_fog(text)
-            features["smog_index"] = textstat.smog_index(text)
-            features["automated_readability_index"] = textstat.automated_readability_index(text)
-            features["coleman_liau_index"] = textstat.coleman_liau_index(text)
+            features["flesch_reading_ease"] = float(textstat.flesch_reading_ease(text))
         except Exception:
             pass
     return features
 
 
 def extract_stylistic_features(text: str) -> Dict[str, float]:
-    """Stylistic markers: punctuation, caps, exclamations, etc."""
+    """Length-normalized stylistic and density features."""
     words = text.split()
     word_count = max(len(words), 1)
+    text_lower = text.lower()
     
     sensational_count = sum(
-        1 for word in SENSATIONAL_WORDS
-        if word.lower() in text.lower()
+        1 for phrase in SENSATIONAL_WORDS
+        if re.search(r"\b" + re.escape(phrase) + r"\b", text_lower)
     )
     hedge_count = sum(
-        1 for word in HEDGE_WORDS
-        if word.lower() in text.lower()
+        1 for phrase in HEDGE_WORDS
+        if re.search(r"\b" + re.escape(phrase) + r"\b", text_lower)
     )
-    strong_modal_count = sum(
-        1 for word in STRONG_MODAL_WORDS
-        if word.lower() in text.lower()
-    )
-    
+    punct_count = count_punctuation(text)
+    excl_count = count_exclamation(text)
+    uppercase_count = count_uppercase_words(text)
+    numeric_count = len(re.findall(r"\b\d+\b", text))
+    sentence_count = get_sentence_count(text)
+
     return {
+        # Raw metrics (preserved for UI display / analytics)
         "word_count": word_count,
-        "sentence_count": get_sentence_count(text),
+        "sentence_count": sentence_count,
+        "punct_count": punct_count,
+        "exclamation_count": excl_count,
+        "uppercase_word_count": uppercase_count,
+        "sensational_word_count": sensational_count,
+        "hedge_word_count": hedge_count,
+        "numeric_count": numeric_count,
+
+        # Length-invariant density features (used for ML prediction)
         "avg_word_length": get_avg_word_length(text),
-        "punct_count": count_punctuation(text),
-        "uppercase_word_count": count_uppercase_words(text),
-        "uppercase_ratio": count_uppercase_words(text) / word_count,
-        "exclamation_count": count_exclamation(text),
-        "question_count": count_question_marks(text),
+        "punct_density": punct_count / word_count,
+        "uppercase_ratio": uppercase_count / word_count,
+        "exclamation_density": excl_count / word_count,
         "stopword_ratio": get_stopword_ratio(text),
         "unique_word_ratio": get_unique_word_ratio(text),
-        "sensational_word_count": sensational_count,
         "sensational_ratio": sensational_count / word_count,
-        "hedge_word_count": hedge_count,
-        "strong_modal_count": strong_modal_count,
-        "has_url": 1 if re.search(r"http\S+|www\S+", text) else 0,
-        "numeric_count": len(re.findall(r"\b\d+\b", text)),
+        "hedge_ratio": hedge_count / word_count,
+        "numeric_density": numeric_count / word_count,
     }
 
 
 def extract_all_features(text: str, source_credibility: float = 0.5) -> Dict[str, Any]:
-    """Extract all features and return as a flat dict."""
+    """Extract all features and return as flat dict."""
     sentiment = extract_sentiment_features(text)
     readability = extract_readability_features(text)
     stylistic = extract_stylistic_features(text)
@@ -150,35 +142,27 @@ def extract_all_features(text: str, source_credibility: float = 0.5) -> Dict[str
     return features
 
 
-def features_to_array(features: Dict[str, float]) -> np.ndarray:
-    """Convert feature dict to numpy array for model input."""
-    # Fixed ordered list of feature keys for model compatibility
-    FEATURE_KEYS = [
-        "vader_compound", "vader_pos", "vader_neg", "vader_neu",
-        "textblob_polarity", "textblob_subjectivity",
-        "flesch_reading_ease", "flesch_kincaid_grade", "gunning_fog",
-        "smog_index", "automated_readability_index", "coleman_liau_index",
-        "word_count", "sentence_count", "avg_word_length",
-        "punct_count", "uppercase_word_count", "uppercase_ratio",
-        "exclamation_count", "question_count",
-        "stopword_ratio", "unique_word_ratio",
-        "sensational_word_count", "sensational_ratio",
-        "hedge_word_count", "strong_modal_count",
-        "has_url", "numeric_count", "source_credibility",
-    ]
-    return np.array([features.get(k, 0.0) for k in FEATURE_KEYS], dtype=np.float32)
-
-
+# Feature names used strictly in the ML model (length-invariant features only)
 FEATURE_NAMES = [
-    "vader_compound", "vader_pos", "vader_neg", "vader_neu",
-    "textblob_polarity", "textblob_subjectivity",
-    "flesch_reading_ease", "flesch_kincaid_grade", "gunning_fog",
-    "smog_index", "automated_readability_index", "coleman_liau_index",
-    "word_count", "sentence_count", "avg_word_length",
-    "punct_count", "uppercase_word_count", "uppercase_ratio",
-    "exclamation_count", "question_count",
-    "stopword_ratio", "unique_word_ratio",
-    "sensational_word_count", "sensational_ratio",
-    "hedge_word_count", "strong_modal_count",
-    "has_url", "numeric_count", "source_credibility",
+    "vader_compound",
+    "vader_pos",
+    "vader_neg",
+    "vader_neu",
+    "textblob_polarity",
+    "textblob_subjectivity",
+    "flesch_reading_ease",
+    "avg_word_length",
+    "punct_density",
+    "uppercase_ratio",
+    "exclamation_density",
+    "stopword_ratio",
+    "unique_word_ratio",
+    "sensational_ratio",
+    "hedge_ratio",
+    "numeric_density",
 ]
+
+
+def features_to_array(features: Dict[str, float]) -> np.ndarray:
+    """Convert length-invariant feature dict to numpy array for model input."""
+    return np.array([float(features.get(k, 0.0)) for k in FEATURE_NAMES], dtype=np.float32)

@@ -6,12 +6,12 @@
   "auc_roc": 1.0,
   "confusion_matrix": [
     [
-      60,
+      600,
       0
     ],
     [
       0,
-      60
+      600
     ]
   ],
   "classification_report": {
@@ -19,31 +19,31 @@
       "precision": 1.0,
       "recall": 1.0,
       "f1-score": 1.0,
-      "support": 60.0
+      "support": 600.0
     },
     "FAKE": {
       "precision": 1.0,
       "recall": 1.0,
       "f1-score": 1.0,
-      "support": 60.0
+      "support": 600.0
     },
     "accuracy": 1.0,
     "macro avg": {
       "precision": 1.0,
       "recall": 1.0,
       "f1-score": 1.0,
-      "support": 120.0
+      "support": 1200.0
     },
     "weighted avg": {
       "precision": 1.0,
       "recall": 1.0,
       "f1-score": 1.0,
-      "support": 120.0
+      "support": 1200.0
     }
   },
-  "total_samples": 120,
-  "fake_samples": 60,
-  "real_samples": 60,
+  "total_samples": 1200,
+  "fake_samples": 600,
+  "real_samples": 600,
   "false_positives_sample": [],
   "false_negatives_sample": []
 }

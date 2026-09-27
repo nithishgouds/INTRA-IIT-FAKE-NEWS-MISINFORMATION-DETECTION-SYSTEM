@@ -1,189 +1,240 @@
 """
-Explainability Layer using SHAP for Fake News Detection
-Generates feature importance explanations for each prediction.
+Explainability Layer using SHAP and Linguistic Feature Attribution
+Generates transparent, human-interpretable explanations for model predictions.
 """
+import re
 import numpy as np
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Optional
 
 try:
     import shap
     HAS_SHAP = True
-except ImportError:
+except Exception:
     HAS_SHAP = False
 
-try:
-    from lime.lime_text import LimeTextExplainer
-    HAS_LIME = True
-except ImportError:
-    HAS_LIME = False
-
-from app.core.feature_extractor import FEATURE_NAMES, extract_all_features, features_to_array
+from app.core.feature_extractor import (
+    FEATURE_NAMES,
+    extract_all_features,
+    features_to_array,
+    SENSATIONAL_WORDS,
+    HEDGE_WORDS,
+)
 from app.core.preprocessor import clean_text
 
 
-FEATURE_DISPLAY_NAMES = {
+FEATURE_DISPLAY_NAMES: Dict[str, str] = {
     "vader_compound": "Overall Sentiment (VADER)",
     "vader_pos": "Positive Sentiment",
     "vader_neg": "Negative Sentiment",
     "vader_neu": "Neutral Sentiment",
     "textblob_polarity": "Text Polarity (TextBlob)",
     "textblob_subjectivity": "Subjectivity Score",
-    "flesch_reading_ease": "Readability (Flesch)",
-    "flesch_kincaid_grade": "Grade Level",
-    "gunning_fog": "Gunning Fog Index",
-    "smog_index": "SMOG Readability",
-    "automated_readability_index": "Auto Readability Index",
-    "coleman_liau_index": "Coleman-Liau Index",
+    "flesch_reading_ease": "Readability Ease (Flesch)",
+    "avg_word_length": "Average Word Length",
+    "punct_density": "Punctuation Density",
+    "uppercase_ratio": "Capitalization Ratio",
+    "exclamation_density": "Exclamation Mark Density",
+    "stopword_ratio": "Functional Stopword Ratio",
+    "unique_word_ratio": "Vocabulary Diversity",
+    "sensational_ratio": "Sensational Language Ratio",
+    "hedge_ratio": "Unverified / Hedge Ratio",
+    "numeric_density": "Numerical Data Density",
+    # Preserved for display
     "word_count": "Word Count",
     "sentence_count": "Sentence Count",
-    "avg_word_length": "Average Word Length",
     "punct_count": "Punctuation Count",
-    "uppercase_word_count": "ALL CAPS Words",
-    "uppercase_ratio": "CAPS Ratio",
     "exclamation_count": "Exclamation Marks",
-    "question_count": "Question Marks",
-    "stopword_ratio": "Stopword Ratio",
-    "unique_word_ratio": "Vocabulary Diversity",
-    "sensational_word_count": "Sensational Words",
-    "sensational_ratio": "Sensational Language Ratio",
-    "hedge_word_count": "Hedge Words (uncertainty)",
-    "strong_modal_count": "Strong Assertions",
-    "has_url": "Contains URLs",
+    "uppercase_word_count": "ALL CAPS Words",
     "numeric_count": "Numbers/Statistics",
     "source_credibility": "Source Credibility Score",
 }
 
-FEATURE_DESCRIPTIONS = {
-    "textblob_subjectivity": "Higher subjectivity suggests opinion-based writing, common in misinformation",
-    "sensational_ratio": "Sensational language (shocking, bombshell, etc.) is a red flag for fake news",
-    "uppercase_ratio": "Excessive capitalization is a stylistic marker of misinformation",
-    "exclamation_count": "High exclamation marks suggest emotional manipulation",
-    "vader_compound": "Extreme sentiment (very positive or very negative) correlates with fake news",
-    "source_credibility": "Historical credibility of the publishing source",
-    "unique_word_ratio": "Low vocabulary diversity may indicate template-based misinformation",
-    "hedge_word_count": "Use of hedging language without sources suggests unverified claims",
-    "strong_modal_count": "Overconfident assertions without evidence are a fake news pattern",
+FEATURE_DESCRIPTIONS: Dict[str, str] = {
+    "textblob_subjectivity": "Higher subjectivity indicates opinion/emotion rather than factual reporting.",
+    "sensational_ratio": "Sensational vocabulary (e.g., 'shocking', 'bombshell') is a strong indicator of clickbait or fake news.",
+    "uppercase_ratio": "Frequent capitalized words reflect urgency/sensationalism.",
+    "exclamation_density": "Excessive exclamation marks suggest emotional appeal rather than objective journalism.",
+    "vader_compound": "Polarized sentiment often accompanies propaganda or emotionally charged misinformation.",
+    "hedge_ratio": "Unattributed hedge phrases ('sources claim', 'allegedly') without citations denote unverified claims.",
+    "unique_word_ratio": "Lower vocabulary diversity can indicate repetitive or templated writing.",
+    "numeric_density": "Density of specific numbers and statistics. Factual reporting frequently cites verifiable quantitative data.",
+    "punct_density": "High punctuation density often correlates with dramatic or informal styling.",
+    "avg_word_length": "Shorter average word length can correlate with informal or simplistic copy.",
+    "flesch_reading_ease": "Readability score compared to standard journalistic writing.",
 }
+
+
+def get_feature_contextual_description(feature_name: str, impact_direction: str, raw_value: float = 0.0) -> str:
+    """
+    Return human-interpretable description that is conceptually and mathematically
+    consistent with the actual contribution direction toward Credible or Misinformation.
+    """
+    if impact_direction == "fake":
+        descriptions = {
+            "hedge_ratio": "Presence of unattributed hedge phrases ('sources claim', 'allegedly') denotes unverified claims.",
+            "sensational_ratio": "Presence of sensational vocabulary (e.g., 'shocking', 'secret') indicates clickbait or unverified claims.",
+            "uppercase_ratio": "Excessive capitalized words reflect urgency, shouting, or sensational framing.",
+            "exclamation_density": "Excessive exclamation marks suggest dramatic emotional appeal over objective journalism.",
+            "textblob_subjectivity": "Elevated subjectivity reflects opinionated or emotional wording over factual reporting.",
+            "vader_compound": "Polarized emotional sentiment aligns with emotionally charged or sensational claims.",
+            "textblob_polarity": "Polarized polarity score reflects opinionated or biased narrative framing.",
+            "vader_neg": "Elevated negative sentiment contributes toward alarmist or fear-based framing.",
+            "vader_pos": "Heightened positive sentiment reflects promotional or exaggerated assertions.",
+            "vader_neu": "Neutral score distribution aligned with misinformation patterns.",
+            "numeric_density": "Low density of verifiable quantitative metrics or statistics.",
+            "unique_word_ratio": "Repetitive phrasing or lower vocabulary diversity.",
+            "punct_density": "High punctuation density correlates with dramatic styling.",
+            "avg_word_length": "Shorter average word length correlates with informal copy.",
+            "stopword_ratio": "Unusual functional word distribution.",
+            "flesch_reading_ease": "Informal readability score aligns with unverified claims.",
+        }
+        return descriptions.get(feature_name, FEATURE_DESCRIPTIONS.get(feature_name, ""))
+    else:
+        descriptions = {
+            "hedge_ratio": "Absence or low level of speculative hedge phrases supports factual credibility.",
+            "sensational_ratio": "Absence of sensational clickbait vocabulary supports objective credibility.",
+            "uppercase_ratio": "Standard capitalization without excessive shouting supports professional reporting.",
+            "exclamation_density": "Absence of dramatic exclamation marks indicates objective journalistic tone.",
+            "textblob_subjectivity": "Low subjectivity and objective tone support factual reporting.",
+            "vader_compound": "Balanced, non-alarmist sentiment supports credible reporting.",
+            "textblob_polarity": "Measured, objective polarity supports credible reporting.",
+            "vader_neu": "Predominantly neutral, objective tone supports journalistic credibility.",
+            "vader_pos": "Constructive, measured factual tone supports credibility.",
+            "vader_neg": "Absence of alarmist negative framing supports credibility.",
+            "numeric_density": "Inclusion of specific quantitative data and statistics supports verifiable reporting.",
+            "unique_word_ratio": "Rich, diverse vocabulary aligns with comprehensive professional reporting.",
+            "punct_density": "Clean, standard punctuation supports professional formatting.",
+            "avg_word_length": "Standard journalistic word length and vocabulary structure.",
+            "stopword_ratio": "Standard natural language sentence structure.",
+            "flesch_reading_ease": "Standard journalistic readability level.",
+        }
+        return descriptions.get(feature_name, FEATURE_DESCRIPTIONS.get(feature_name, ""))
 
 
 def get_top_features(features: Dict[str, float], n: int = 10) -> List[Dict[str, Any]]:
     """
-    Return top N most informative features with their values and impact direction.
-    Uses rule-based scoring when SHAP is unavailable.
+    Return top N most informative length-invariant features with their calculated impact and direction.
     """
-    # Fake news indicator weights (positive = suggests fake, negative = suggests real)
-    FAKE_WEIGHTS = {
-        "textblob_subjectivity": 0.8,
-        "sensational_ratio": 1.5,
-        "uppercase_ratio": 1.2,
-        "exclamation_count": 0.6,
-        "strong_modal_count": 0.5,
-        "hedge_word_count": 0.4,
+    fake_weights = {
+        "sensational_ratio": 2.5,
+        "uppercase_ratio": 1.5,
+        "textblob_subjectivity": 1.0,
+        "exclamation_density": 1.2,
+        "hedge_ratio": 1.2,
+        "punct_density": 0.4,
         "vader_neg": 0.4,
-        "source_credibility": -1.5,   # Higher credibility = less fake
-        "unique_word_ratio": -0.5,    # Higher diversity = less fake
-        "flesch_reading_ease": -0.2,  # Easier reading = slightly more fake
-        "sensational_word_count": 1.0,
-        "has_url": -0.3,
+        "numeric_density": -1.0,
+        "unique_word_ratio": -0.6,
+        "flesch_reading_ease": -0.2,
     }
-    
+
     scored = []
-    for feat_name, weight in FAKE_WEIGHTS.items():
-        value = features.get(feat_name, 0.0)
+    for feat_name, weight in fake_weights.items():
+        value = float(features.get(feat_name, 0.0))
         impact = float(value * weight)
+        dir_str = "fake" if impact > 0 else "real"
         scored.append({
             "feature": feat_name,
             "display_name": FEATURE_DISPLAY_NAMES.get(feat_name, feat_name),
-            "value": round(float(value), 4),
+            "value": round(value, 4),
             "impact": round(impact, 4),
-            "impact_direction": "fake" if impact > 0 else "real",
-            "description": FEATURE_DESCRIPTIONS.get(feat_name, ""),
+            "shap_value": round(impact, 4),
+            "impact_direction": dir_str,
+            "description": get_feature_contextual_description(feat_name, dir_str, value),
         })
-    
-    # Sort by absolute impact
+
     scored.sort(key=lambda x: abs(x["impact"]), reverse=True)
     return scored[:n]
 
 
-def explain_with_shap(model, vectorizer, text: str, source: str = "") -> Dict[str, Any]:
+def explain_with_shap(model: Any, vectorizer: Any, text: str, source: str = "", source_credibility: Optional[float] = None) -> Dict[str, Any]:
     """
-    Generate SHAP explanation for a prediction.
-    Falls back to feature-based explanation if SHAP fails.
+    Generate SHAP-based feature importance for a prediction.
+    Gracefully falls back to heuristic feature attribution if SHAP is unavailable.
     """
-    from app.core.feature_extractor import extract_all_features
     from app.core.credibility import get_seed_credibility
-    
-    cred = getattr(model, "source_cred_", {}).get(source, get_seed_credibility(source))
+
+    if source_credibility is not None:
+        cred = source_credibility
+    else:
+        cred = getattr(model, "source_cred_", {}).get(source, get_seed_credibility(source)) if model else get_seed_credibility(source)
+
     features = extract_all_features(text, source_credibility=cred)
-    top_features = get_top_features(features)
-    
-    if not HAS_SHAP or not hasattr(model, "source_cred_"):
+    fallback_features = get_top_features(features, n=10)
+
+    if model is None or vectorizer is None or not hasattr(model, "scaler_"):
         return {
             "method": "feature_weights",
-            "top_features": top_features,
+            "top_features": fallback_features,
             "shap_values": None,
         }
-    
+
     try:
         cleaned = clean_text(text, remove_stopwords=True, lemmatize=True)
         tfidf_vec = vectorizer.transform([cleaned]).toarray()
-        
-        from app.core.feature_extractor import features_to_array
         hc_vec = features_to_array(features).reshape(1, -1)
         hc_scaled = model.scaler_.transform(hc_vec)
-        X = np.hstack([tfidf_vec, hc_scaled])
         
-        # Use linear SHAP explainer for logistic regression
-        explainer = shap.LinearExplainer(model, X, feature_perturbation="correlation_dependent")
-        shap_vals = explainer.shap_values(X)[0]  # For FAKE class
-        
-        feature_names = model.feature_names_
-        # Get top SHAP features (from handcrafted features section)
-        n_tfidf = model.n_tfidf_features_
-        hc_shap = shap_vals[n_tfidf:]
-        
+        # Apply handcrafted feature weight scaling if stored on model
+        hc_weight = getattr(model, "hc_weight_", 1.0)
+        hc_weighted = hc_scaled * hc_weight
+        X = np.hstack([tfidf_vec, hc_weighted])
+
+        n_tfidf = getattr(model, "n_tfidf_features_", tfidf_vec.shape[1])
+        hc_coefs = model.coef_[0, n_tfidf:] if hasattr(model, "coef_") else [0.0] * len(FEATURE_NAMES)
+        hc_inputs = hc_weighted[0]
+
         shap_features = []
         for i, fname in enumerate(FEATURE_NAMES):
-            sv = float(hc_shap[i]) if i < len(hc_shap) else 0.0
+            coef = float(hc_coefs[i]) if i < len(hc_coefs) else 0.0
+            val_scaled = float(hc_inputs[i]) if i < len(hc_inputs) else 0.0
+            contrib = coef * val_scaled
+            raw_val = float(features.get(fname, 0.0))
+            dir_str = "fake" if contrib > 0 else "real"
+
             shap_features.append({
                 "feature": fname,
                 "display_name": FEATURE_DISPLAY_NAMES.get(fname, fname),
-                "value": round(features.get(fname, 0.0), 4),
-                "shap_value": round(sv, 4),
-                "impact_direction": "fake" if sv > 0 else "real",
-                "description": FEATURE_DESCRIPTIONS.get(fname, ""),
+                "value": round(raw_val, 4),
+                "impact": round(contrib, 4),
+                "shap_value": round(contrib, 4),
+                "impact_direction": dir_str,
+                "description": get_feature_contextual_description(fname, dir_str, raw_val),
             })
-        
-        shap_features.sort(key=lambda x: abs(x["shap_value"]), reverse=True)
-        
+
+        shap_features.sort(key=lambda x: abs(x["impact"]), reverse=True)
+
         return {
             "method": "shap",
             "top_features": shap_features[:10],
-            "shap_values": [round(float(v), 5) for v in hc_shap[:20]],
+            "shap_values": [round(f["impact"], 5) for f in shap_features[:10]],
         }
-    except Exception as e:
+    except Exception as exc:
         return {
             "method": "feature_weights",
-            "top_features": top_features,
+            "top_features": fallback_features,
             "shap_values": None,
-            "error": str(e),
+            "error": str(exc),
+        }
+    except Exception as exc:
+        return {
+            "method": "feature_weights",
+            "top_features": fallback_features,
+            "shap_values": None,
+            "error": str(exc),
         }
 
 
-def highlight_suspicious_text(text: str, features: Dict[str, float]) -> List[Dict[str, Any]]:
+def highlight_suspicious_text(text: str, features: Optional[Dict[str, float]] = None) -> List[Dict[str, Any]]:
     """
-    Identify suspicious text segments (sensational words, CAPS, excessive punctuation).
-    Returns list of highlighted spans for the UI.
+    Identify non-overlapping suspicious text segments for highlighting in UI.
     """
-    import re
-    from app.core.feature_extractor import SENSATIONAL_WORDS, HEDGE_WORDS, STRONG_MODAL_WORDS
-    
-    highlights = []
+    highlights: List[Dict[str, Any]] = []
     text_lower = text.lower()
-    
-    # Sensational words
+
+    # 1. Sensational keywords
     for word in SENSATIONAL_WORDS:
-        for match in re.finditer(re.escape(word), text_lower):
+        for match in re.finditer(r"\b" + re.escape(word) + r"\b", text_lower):
             highlights.append({
                 "start": match.start(),
                 "end": match.end(),
@@ -192,10 +243,10 @@ def highlight_suspicious_text(text: str, features: Dict[str, float]) -> List[Dic
                 "label": "Sensational Language",
                 "color": "#ef4444",
             })
-    
-    # Hedge words
+
+    # 2. Hedge words / Unverified claims
     for word in HEDGE_WORDS:
-        for match in re.finditer(re.escape(word), text_lower):
+        for match in re.finditer(r"\b" + re.escape(word) + r"\b", text_lower):
             highlights.append({
                 "start": match.start(),
                 "end": match.end(),
@@ -204,18 +255,34 @@ def highlight_suspicious_text(text: str, features: Dict[str, float]) -> List[Dic
                 "label": "Unverified Claim",
                 "color": "#f59e0b",
             })
-    
-    # ALL CAPS words
+
+    # 3. Excessive Capitalization (3+ uppercase letters in non-standard acronym words)
+    STANDARD_ACRONYMS = {
+        "ISRO", "NASA", "WHO", "CDC", "GSLV", "PSLV", "IIT", "USA", "UK",
+        "AI", "ML", "COVID", "UN", "EU", "PM", "DRDO", "NOAA", "ESA",
+        "MIT", "BBC", "CNN", "AFP", "GMT", "UTC", "EST", "IST", "UAV", "GDP", "NDTV"
+    }
     for match in re.finditer(r"\b[A-Z]{3,}\b", text):
-        highlights.append({
-            "start": match.start(),
-            "end": match.end(),
-            "text": match.group(),
-            "type": "caps",
-            "label": "Excessive Capitalization",
-            "color": "#8b5cf6",
-        })
-    
-    # Sort by position and deduplicate
-    highlights.sort(key=lambda x: x["start"])
-    return highlights[:20]  # Limit to 20 highlights
+        word = match.group()
+        if word not in STANDARD_ACRONYMS:
+            highlights.append({
+                "start": match.start(),
+                "end": match.end(),
+                "text": word,
+                "type": "caps",
+                "label": "Excessive Capitalization",
+                "color": "#8b5cf6",
+            })
+
+    # Sort by starting index
+    highlights.sort(key=lambda x: (x["start"], -(x["end"] - x["start"])))
+
+    # Deduplicate / merge overlapping spans
+    filtered: List[Dict[str, Any]] = []
+    last_end = -1
+    for hl in highlights:
+        if hl["start"] >= last_end:
+            filtered.append(hl)
+            last_end = hl["end"]
+
+    return filtered[:25]

@@ -1,20 +1,17 @@
 """
-ML Classification Model for Fake News Detection
-Uses TF-IDF + Logistic Regression ensemble with handcrafted features.
-Includes training, inference, and persistence.
+ML Content Classification Model for Fake News & Misinformation Detection
+Uses TF-IDF (word & char n-grams) + length-invariant linguistic/stylistic feature pipeline.
+Decouples content veracity classification from source reputation signals.
 """
 import os
 import json
 import numpy as np
 import joblib
 from pathlib import Path
-from typing import Dict, Any, Tuple, List
-from sklearn.pipeline import Pipeline, FeatureUnion
+from typing import Dict, Any, Tuple, List, Optional
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
-from sklearn.ensemble import GradientBoostingClassifier, VotingClassifier
 from sklearn.preprocessing import StandardScaler
-from sklearn.calibration import CalibratedClassifierCV
 from sklearn.metrics import (
     accuracy_score, precision_score, recall_score,
     f1_score, roc_auc_score, classification_report,
@@ -32,14 +29,18 @@ MODEL_FILE = MODEL_PATH / "fake_news_model.joblib"
 VECTORIZER_FILE = MODEL_PATH / "tfidf_vectorizer.joblib"
 METRICS_FILE = MODEL_PATH / "metrics.json"
 
-MODEL_VERSION = "v1.0"
+MODEL_VERSION = "v2.0-length-invariant-robust"
+
+# Centralized Decision Thresholds
+FAKE_THRESHOLD = 0.65
+REAL_THRESHOLD = 0.35
+
+# Weight factor for handcrafted stylistic density features relative to TF-IDF semantic features
+HANDCRAFTED_FEATURE_WEIGHT = 0.35
 
 
 class HandcraftedFeatureTransformer(BaseEstimator, TransformerMixin):
-    """Transformer that extracts handcrafted features from text."""
-    
-    def __init__(self, source_credibilities=None):
-        self.source_credibilities = source_credibilities or {}
+    """Transformer that extracts length-invariant handcrafted features from text."""
     
     def fit(self, X, y=None):
         return self
@@ -47,16 +48,10 @@ class HandcraftedFeatureTransformer(BaseEstimator, TransformerMixin):
     def transform(self, X):
         results = []
         for item in X:
-            if isinstance(item, dict):
-                text = item.get("text", "")
-                source = item.get("source", "")
-                cred = self.source_credibilities.get(source, 0.5)
-            else:
-                text = str(item)
-                cred = 0.5
-            feats = extract_all_features(text, source_credibility=cred)
+            text = str(item)
+            feats = extract_all_features(text)
             results.append(features_to_array(feats))
-        return np.array(results)
+        return np.array(results, dtype=np.float32)
 
 
 # Global model cache
@@ -90,36 +85,19 @@ def is_trained() -> bool:
 
 def train_model(texts: List[str], labels: List[int], sources: List[str] = None):
     """
-    Train the fake news detection model.
-    labels: 0 = REAL, 1 = FAKE
+    Train the fake news content classification model.
+    labels: 0 = REAL / CREDIBLE, 1 = FAKE / MISINFORMATION
     """
     global _model, _vectorizer, _is_trained
     
     MODEL_PATH.mkdir(parents=True, exist_ok=True)
-    sources = sources or [""] * len(texts)
     
-    # Clean texts
+    # 1. Clean texts
     cleaned = [clean_text(t, remove_stopwords=True, lemmatize=True) for t in texts]
     
-    # Build source credibility map from training labels
-    from collections import defaultdict
-    source_stats = defaultdict(lambda: {"real": 0, "fake": 0})
-    for s, l in zip(sources, labels):
-        if s:
-            if l == 0:
-                source_stats[s]["real"] += 1
-            else:
-                source_stats[s]["fake"] += 1
-    
-    source_cred = {}
-    for s, stats in source_stats.items():
-        total = stats["real"] + stats["fake"]
-        alpha = 2
-        source_cred[s] = (stats["real"] + alpha) / (total + 2 * alpha)
-    
-    # TF-IDF vectorizer
+    # 2. TF-IDF vectorizer (word unigrams + bigrams)
     _vectorizer = TfidfVectorizer(
-        max_features=20000,
+        max_features=5000,
         ngram_range=(1, 2),
         sublinear_tf=True,
         min_df=2,
@@ -128,74 +106,79 @@ def train_model(texts: List[str], labels: List[int], sources: List[str] = None):
     )
     tfidf_features = _vectorizer.fit_transform(cleaned).toarray()
     
-    # Handcrafted features
-    items = [{"text": t, "source": s} for t, s in zip(texts, sources)]
-    hc_transformer = HandcraftedFeatureTransformer(source_credibilities=source_cred)
-    hc_features = hc_transformer.transform(items)
+    # 3. Handcrafted length-invariant features
+    hc_transformer = HandcraftedFeatureTransformer()
+    hc_features = hc_transformer.transform(texts)
     
-    # Combine features
-    X = np.hstack([tfidf_features, hc_features])
-    y = np.array(labels)
-    
-    # Scale handcrafted features part (TF-IDF is already normalized)
+    # 4. Standardize handcrafted features with content-balancing weight
     scaler = StandardScaler()
-    X[:, -len(FEATURE_NAMES):] = scaler.fit_transform(X[:, -len(FEATURE_NAMES):])
+    hc_scaled = scaler.fit_transform(hc_features)
+    hc_weighted = hc_scaled * HANDCRAFTED_FEATURE_WEIGHT
     
-    # Train Logistic Regression with calibration
+    # 5. Combine TF-IDF and handcrafted features
+    X = np.hstack([tfidf_features, hc_weighted])
+    y = np.array(labels, dtype=np.int32)
+    
+    # 6. Train Balanced Logistic Regression Classifier
     lr = LogisticRegression(
-        C=1.0, max_iter=1000, solver="lbfgs",
-        class_weight="balanced", random_state=42
+        C=2.0,
+        max_iter=1000,
+        solver="lbfgs",
+        class_weight="balanced",
+        random_state=42
     )
     lr.fit(X, y)
     
-    # Store metadata on model object for inference
-    lr.source_cred_ = source_cred
+    # Store metadata on model object for inference and XAI
     lr.scaler_ = scaler
+    lr.hc_weight_ = HANDCRAFTED_FEATURE_WEIGHT
     lr.n_tfidf_features_ = tfidf_features.shape[1]
     lr.feature_names_ = list(_vectorizer.get_feature_names_out()) + FEATURE_NAMES
     
     _model = lr
     _is_trained = True
     
-    # Save
+    # Persist artifacts
     joblib.dump(_model, MODEL_FILE)
     joblib.dump(_vectorizer, VECTORIZER_FILE)
     
     return _model
 
 
-def _prepare_features(text: str, source: str = ""):
+def _prepare_features(text: str):
     """Prepare combined feature vector for a single text."""
     cleaned = clean_text(text, remove_stopwords=True, lemmatize=True)
     tfidf_vec = _vectorizer.transform([cleaned]).toarray()
     
-    cred = _model.source_cred_.get(source, 0.5)
-    feats = extract_all_features(text, source_credibility=cred)
+    feats = extract_all_features(text)
     hc_vec = features_to_array(feats).reshape(1, -1)
-    
     hc_scaled = _model.scaler_.transform(hc_vec)
-    X = np.hstack([tfidf_vec, hc_scaled])
+    hc_weight = getattr(_model, "hc_weight_", HANDCRAFTED_FEATURE_WEIGHT)
+    hc_weighted = hc_scaled * hc_weight
+    
+    X = np.hstack([tfidf_vec, hc_weighted])
     return X, feats
 
 
-def predict(text: str, source: str = "") -> Dict[str, Any]:
+def predict(text: str, source: str = "", source_credibility: Optional[float] = None) -> Dict[str, Any]:
     """
-    Run inference on a single article.
-    Returns label, confidence, probabilities, and features.
+    Run content inference on a single article or statement.
+    Returns label, confidence, real/fake probabilities, and extracted features.
     """
     if not is_trained():
-        # Return a mock prediction if model not trained
-        return _mock_predict(text, source)
+        return _mock_predict(text, source, source_credibility)
     
-    X, feats = _prepare_features(text, source)
+    X, feats = _prepare_features(text)
     proba = _model.predict_proba(X)[0]
+    
+    # Binary class mapping: 0 = REAL, 1 = FAKE
     fake_prob = float(proba[1]) if len(proba) > 1 else float(proba[0])
     real_prob = float(proba[0]) if len(proba) > 1 else 1.0 - float(proba[0])
     
-    # Determine label
-    if fake_prob >= 0.65:
+    # Determine classification label using centralized thresholds
+    if fake_prob >= FAKE_THRESHOLD:
         label = "FAKE"
-    elif fake_prob <= 0.35:
+    elif fake_prob <= REAL_THRESHOLD:
         label = "REAL"
     else:
         label = "UNCERTAIN"
@@ -212,20 +195,14 @@ def predict(text: str, source: str = "") -> Dict[str, Any]:
     }
 
 
-def _mock_predict(text: str, source: str = "") -> Dict[str, Any]:
-    """Heuristic-based prediction when model is not trained."""
+def _mock_predict(text: str, source: str = "", source_credibility: Optional[float] = None) -> Dict[str, Any]:
+    """Heuristic fallback prediction when model artifacts are loading."""
     from app.core.feature_extractor import extract_all_features
-    from app.core.credibility import get_seed_credibility
+    feats = extract_all_features(text, source_credibility=source_credibility or 0.5)
     
-    cred = get_seed_credibility(source)
-    feats = extract_all_features(text, source_credibility=cred)
-    
-    # Simple heuristic scoring
     score = 0.5
     score -= feats.get("textblob_subjectivity", 0) * 0.15
     score -= feats.get("sensational_ratio", 0) * 2.0
-    score += feats.get("source_credibility", 0.5) * 0.2
-    score -= abs(feats.get("vader_compound", 0)) * 0.1
     score -= feats.get("uppercase_ratio", 0) * 0.5
     score = max(0.05, min(0.95, score))
     
@@ -245,25 +222,24 @@ def _mock_predict(text: str, source: str = "") -> Dict[str, Any]:
         "fake_probability": round(fake_prob, 4),
         "real_probability": round(real_prob, 4),
         "features": feats,
-        "model_version": "heuristic-v1",
+        "model_version": "heuristic-v2",
     }
 
 
 def evaluate_model(texts: List[str], labels: List[int], sources: List[str] = None) -> Dict[str, Any]:
-    """Evaluate model on a test set and return metrics."""
-    sources = sources or [""] * len(texts)
+    """Evaluate model on a test set and persist metrics."""
     predictions = []
     fake_probs = []
     
-    for text, source in zip(texts, sources):
-        result = predict(text, source)
+    for text in texts:
+        result = predict(text)
         label_int = 1 if result["label"] == "FAKE" else 0
         predictions.append(label_int)
         fake_probs.append(result["fake_probability"])
     
-    y_true = np.array(labels)
-    y_pred = np.array(predictions)
-    y_prob = np.array(fake_probs)
+    y_true = np.array(labels, dtype=np.int32)
+    y_pred = np.array(predictions, dtype=np.int32)
+    y_prob = np.array(fake_probs, dtype=np.float32)
     
     metrics = {
         "accuracy": round(float(accuracy_score(y_true, y_pred)), 4),

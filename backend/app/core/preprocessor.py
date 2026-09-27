@@ -23,7 +23,30 @@ def download_nltk_data():
 download_nltk_data()
 
 _stop_words = set(stopwords.words("english"))
+# Preserve negation & corrective words in vocabulary so corrective statements are distinguished
+NEGATION_WORDS = {"no", "not", "nor", "never", "neither", "none", "without", "against"}
+_filtered_stop_words = _stop_words - NEGATION_WORDS
 _lemmatizer = WordNetLemmatizer()
+
+
+def combine_title_and_text(title: str = None, text: str = None) -> str:
+    """
+    Combine title/headline and article body into a canonical text string.
+    Rules:
+    - if title is empty -> body only
+    - if body is empty -> title only
+    - if body already starts with the same title (case-insensitive) -> body only
+    - otherwise -> title + "\n" + body
+    """
+    t = (title or "").strip()
+    b = (text or "").strip()
+    if not t:
+        return b
+    if not b:
+        return t
+    if b.lower().startswith(t.lower()):
+        return b
+    return f"{t}\n{b}"
 
 
 def clean_text(text: str, remove_stopwords: bool = False, lemmatize: bool = False) -> str:
@@ -52,7 +75,7 @@ def clean_text(text: str, remove_stopwords: bool = False, lemmatize: bool = Fals
     if remove_stopwords or lemmatize:
         tokens = word_tokenize(text)
         if remove_stopwords:
-            tokens = [t for t in tokens if t not in _stop_words and len(t) > 2]
+            tokens = [t for t in tokens if t not in _filtered_stop_words and len(t) > 1]
         if lemmatize:
             tokens = [_lemmatizer.lemmatize(t) for t in tokens]
         text = " ".join(tokens)
@@ -91,12 +114,30 @@ def get_avg_word_length(text: str) -> float:
     return sum(len(w) for w in words) / len(words)
 
 
+STANDARD_ACRONYMS = {
+    "ISRO", "NASA", "WHO", "UN", "RBI", "CDC", "DRDO", "ESA", "JPL", "G20",
+    "IIT", "EU", "USA", "UK", "AI", "ML", "COVID", "PM", "NOAA", "MIT",
+    "BBC", "CNN", "AFP", "GMT", "UTC", "EST", "IST", "UAV", "GDP", "NDTV",
+    "PSLV", "GSLV", "CEO", "CFO", "CTO", "FBI", "CIA", "IMF", "UNESCO",
+    "UNICEF", "NATO"
+}
+
+
 def count_punctuation(text: str) -> int:
     return sum(1 for c in text if c in string.punctuation)
 
 
 def count_uppercase_words(text: str) -> int:
-    return sum(1 for w in text.split() if w.isupper() and len(w) > 1)
+    """
+    Count words with excessive uppercase capitalization.
+    Excludes standard journalistic, scientific, and institutional acronyms.
+    """
+    count = 0
+    for w in text.split():
+        clean_w = re.sub(r"^[^\w]+|[^\w]+$", "", w)
+        if clean_w.isupper() and len(clean_w) > 1 and clean_w not in STANDARD_ACRONYMS:
+            count += 1
+    return count
 
 
 def count_exclamation(text: str) -> int:
